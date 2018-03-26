@@ -7,8 +7,7 @@
 extern "C"{
 #endif  //__cplusplus
 
-
-
+//--------------- DATA TYPES --------------
 typedef unsigned int WORD;
 typedef unsigned char BYTE;
 
@@ -17,6 +16,7 @@ typedef union _sha256_ctx{
 	BYTE hash8[32];
 }SHA256;
 
+//----------- FUNCTION DECLARATION --------
 void sha256_transform(SHA256 *ctx, const BYTE *msg);
 void sha256(SHA256 *ctx, const BYTE *msg, size_t len);
 

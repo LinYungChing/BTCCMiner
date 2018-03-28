@@ -37,12 +37,12 @@ namespace tcp
     // Destructor
     TCPClient::~TCPClient()
     {
-        //TODO: Close()
+        this->close();
     }
 
     // Utils
     bool TCPClient::setup(const std::string &address, const int &port,
-                   const std::string &login, const std::string &password,
+                   const std::string &user, const std::string &password,
                    error_callback ec)
     {
         if(connect_status == true)
@@ -53,6 +53,11 @@ namespace tcp
         this->server_user = user;
         this->server_password = password;
         this->_error = ec;
+
+        std::cout << "Addr: " << address << std::endl;
+        std::cout << "port: " << port << std::endl;
+        std::cout << "user: " << user << std::endl;
+        std::cout << "pass: " << password << std::endl;
 
         // get hostname from address
         if(inet_addr(address.c_str()) == -1)
@@ -84,8 +89,16 @@ namespace tcp
     // close socket
     void TCPClient::close()
     {
-        close(sock_number);
+        if(this->connect_status == true)
+            ::close(sock_number);
         this->connect_status = false;
+    }
+
+
+    bool TCPClient::reconnect()
+    {
+        this->close();
+        return this->_connect();
     }
 
 
@@ -93,7 +106,7 @@ namespace tcp
     {
         if(connect_status == true)
         {
-            if(send(sock_number, data.c_str(), strlen(data.c_str()), 0) < 0)
+            if(::send(sock_number, data.c_str(), data.size(), 0) < 0)
             {
                 ERROR_RECONN(CONNECTION_ERROR, "Failed to send message to the server");
                 return false;
@@ -104,12 +117,12 @@ namespace tcp
         return true;
     }
 
-    std::string TCPClient::recv(size_t size = 4096)
+    std::string TCPClient::recv(size_t size)
     {
         char buffer[size+1];
         memset(&buffer[0], 0, sizeof(buffer));
 
-        size_t count = recv(sock_number, buffer, size, 0);
+        size_t count = ::recv(sock_number, buffer, size, 0);
 
         if( count < 0)
         {
@@ -129,9 +142,14 @@ namespace tcp
     std::string TCPClient::getPassword()  { return server_password; }
 
 
-    // private function
+    // overload
+    TCPClient::operator bool()
+    {
+        return this->connect_status;
+    }
 
-    bool _connect()
+    // private function
+    bool TCPClient::_connect()
     {
         // create socket
         sock_number = socket(AF_INET, SOCK_STREAM, 0);
@@ -144,7 +162,7 @@ namespace tcp
         // create connection
         sock_info.sin_family = AF_INET;
         sock_info.sin_port = htons(this->server_port);
-        if(connect(sock_number, (struct sockaddr *)&sock_info, sizeof(server)) < 0)
+        if(connect(sock_number, (struct sockaddr *)&sock_info, sizeof(sock_info)) < 0)
         {
             ERROR_CALL(CONNECTION_ERROR, "Failed to connect to the server");
             return false;
@@ -152,6 +170,7 @@ namespace tcp
 
         return this->connect_status = true;
     }
+
 }
 
 #undef ERROR_CALL
@@ -161,7 +180,7 @@ namespace tcp
 #ifdef __TCP_CLIENT_UNITTEST__
 int main(int argc, char **argv)
 {
-    tcp::TCPClient client("127.0.0.1", "8765", 
+    tcp::TCPClient client("127.0.0.1", 8765, 
                           "zexlus1126", "fuckyou123");
 
     if(!client)

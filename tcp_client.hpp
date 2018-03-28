@@ -3,16 +3,23 @@
 #include <string>
 #include <cstring>
 
+extern "C"{
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+}
 
 namespace tcp
 {
     class TCPClient;
-    void default_error_callback(int error, const std::string &msg, TCPClient *client, bool reconnect = false);
+    void default_error_callback(int error, const std::string &msg, 
+                                TCPClient *client, bool reconnect = false);
 
-    typedef void(*error_callback)(int error, const std::string &msg, TCPClient *client);
+    typedef void(*error_callback)(int error, const std::string &msg, 
+                                  TCPClient *client, bool reconnect);
 
     class TCPClient
     {
@@ -32,7 +39,7 @@ namespace tcp
     public:
         // Constructor
         TCPClient();
-        TCPClient(const std::string &address, const std::string &port, 
+        TCPClient(const std::string &address, const int &port, 
                   const std::string &login, const std::string &password,
                   error_callback ec = default_error_callback);
 
@@ -40,13 +47,13 @@ namespace tcp
         ~TCPClient();
 
         // Utils
-        bool setup(const std::string &address, const std::string &port,
+        bool setup(const std::string &address, const int &port,
                    const std::string &login, const std::string &password,
                    error_callback ec = default_error_callback);
 
         void close();
 
-        void reconnect();
+        bool reconnect();
 
         // Send/Recv 
         bool        send(std::string data);
@@ -58,7 +65,8 @@ namespace tcp
         std::string getUser();
         std::string getPassword();
 
-
+        // overload
+        explicit operator bool();
 
     private:
         bool _connect();

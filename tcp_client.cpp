@@ -26,12 +26,11 @@ namespace tcp
     }
 
     TCPClient::TCPClient(const std::string &address, const int &port, 
-                  const std::string &user, const std::string &password,
                   error_callback ec) :
             connect_status(false),
             sock_number(-1)
     {
-        this->setup(address, port, user, password, ec);
+        this->setup(address, port, ec);
     }
 
     // Destructor
@@ -42,7 +41,6 @@ namespace tcp
 
     // Utils
     bool TCPClient::setup(const std::string &address, const int &port,
-                   const std::string &user, const std::string &password,
                    error_callback ec)
     {
         if(connect_status == true)
@@ -50,14 +48,10 @@ namespace tcp
 
         this->server_address = address;
         this->server_port = port;
-        this->server_user = user;
-        this->server_password = password;
         this->_error = ec;
 
         std::cout << "Addr: " << address << std::endl;
         std::cout << "port: " << port << std::endl;
-        std::cout << "user: " << user << std::endl;
-        std::cout << "pass: " << password << std::endl;
 
         // get hostname from address
         if(inet_addr(address.c_str()) == -1)
@@ -101,7 +95,14 @@ namespace tcp
         return this->_connect();
     }
 
+    bool TCPClient::status()
+    {
+        return this->connect_status;
+    }
 
+
+    // send/recv
+    //
     bool TCPClient::send(std::string data)
     {
         if(connect_status == true)
@@ -138,8 +139,6 @@ namespace tcp
     //Get Func
     std::string TCPClient::getAddress()   { return server_address; }
     int         TCPClient::getPort()      { return server_port; }
-    std::string TCPClient::getUser()      { return server_user; }
-    std::string TCPClient::getPassword()  { return server_password; }
 
 
     // overload
@@ -180,8 +179,7 @@ namespace tcp
 #ifdef __TCP_CLIENT_UNITTEST__
 int main(int argc, char **argv)
 {
-    tcp::TCPClient client("127.0.0.1", 8765, 
-                          "zexlus1126", "fuckyou123");
+    tcp::TCPClient client("127.0.0.1", 8765);
 
     if(!client)
     {

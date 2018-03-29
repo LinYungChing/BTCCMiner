@@ -27,8 +27,6 @@ namespace tcp
         bool                connect_status;
         std::string         server_address;  // server ip address
         int                 server_port;  // server port
-        std::string         server_user;
-        std::string         server_password;
 
         error_callback      _error;
 
@@ -40,7 +38,6 @@ namespace tcp
         // Constructor
         TCPClient();
         TCPClient(const std::string &address, const int &port, 
-                  const std::string &login, const std::string &password,
                   error_callback ec = default_error_callback);
 
         // Destructor
@@ -48,12 +45,10 @@ namespace tcp
 
         // Utils
         bool setup(const std::string &address, const int &port,
-                   const std::string &login, const std::string &password,
                    error_callback ec = default_error_callback);
-
         void close();
-
         bool reconnect();
+        bool status();
 
         // Send/Recv 
         bool        send(std::string data);
@@ -62,8 +57,6 @@ namespace tcp
         // Get Func
         std::string getAddress();
         int         getPort();
-        std::string getUser();
-        std::string getPassword();
 
         // overload
         explicit operator bool();

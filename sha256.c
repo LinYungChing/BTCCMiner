@@ -1,6 +1,6 @@
 
-// This sha256 algorithm is based on sha256 wiki page
-// please refer to the wiki page:
+// This sha256 implementation is based on sha256 wiki page
+// please refer to:
 //     https://en.wikipedia.org/wiki/SHA-2
 
 #include <stdio.h>

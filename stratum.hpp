@@ -125,6 +125,8 @@ namespace stratum
 
         void clear();
 
+        Message &operator=(const Message &msg);
+
         friend class MsgParser;
 
     private:

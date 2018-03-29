@@ -53,6 +53,7 @@ namespace tcp
         // Send/Recv 
         bool        send(std::string data);
         std::string recv(size_t size = 4096);
+        std::string getline(char delim = '\n');
 
         // Get Func
         std::string getAddress();

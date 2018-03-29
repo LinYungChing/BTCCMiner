@@ -102,16 +102,30 @@ namespace stratum
     bool Worker::_subscribe()
     {
         this->client.send(MsgParser::subscribe());
-        std::string reply = this->client.recv(4000);
-        std::cout << "subscribe: " << reply << std::endl;
+        std::string reply = this->client.getline();
+        Message msg = MsgParser::parse(reply);
+        std::cout << MsgType::match_type(msg.getType()) << ": "
+                  << reply << std::endl;
+
+        reply = this->client.getline();
+        msg = MsgParser::parse(reply);
+        std::cout << MsgType::match_type(msg.getType()) << ": "
+                  << reply << std::endl;
+        
+        reply = this->client.getline();
+        msg = MsgParser::parse(reply);
+        std::cout << MsgType::match_type(msg.getType()) << ": "
+                  << reply << std::endl;
         return true;
     }
 
     bool Worker::_authorize()
     {
         this->client.send(MsgParser::authorize(this->username, this->password));
-        std::string reply = this->client.recv(4000);
-        std::cout << "authorize: " << reply << std::endl;
+        std::string reply = this->client.getline();
+        Message msg = MsgParser::parse(reply);
+        std::cout << MsgType::match_type(msg.getType()) << ": "
+                  << reply << std::endl;
         return true;
     }
 
@@ -162,6 +176,9 @@ namespace stratum
 
     bool Message::parse()
     {
+        if(value != NULL)
+            json_value_free(value);
+        value = NULL;
         this->value = json_parse(this->json.c_str(), this->json.size());
         this->_parse_type();
         return this->value != NULL;
@@ -171,7 +188,18 @@ namespace stratum
     {
         _type = MsgType::NONE;
         json = std::string();
-        json_value_free(value);
+        if(value != NULL)
+            json_value_free(value);
+        value = NULL;
+    }
+
+    Message &Message::operator=(const Message &msg)
+    {
+        this->clear();
+        this->_type = msg._type;
+        this->json = msg.json;
+        this->parse();
+        return *this;
     }
 
     // Private
@@ -283,6 +311,8 @@ namespace stratum
     }
 
     std::map<std::string, MsgType> MsgType::s2t_mapping = {
+            {"none",                        MsgType::NONE},
+            {"unknown",                     MsgType::UNKNOWN},
             {"mining.authorize",            MsgType::AUTHORIZE},
             {"mining.capabilities",         MsgType::CAPABILITIES},
             {"mining.get_transactions",     MsgType::GET_TRANSACTIONS},
@@ -300,6 +330,8 @@ namespace stratum
     };
 
     std::map<MsgType, std::string> MsgType::t2s_mapping = {
+            {MsgType::NONE,                 "none"},
+            {MsgType::UNKNOWN,              "unknown"},
             {MsgType::AUTHORIZE,            "mining.authorize"},
             {MsgType::CAPABILITIES,         "mining.capabilities"},
             {MsgType::GET_TRANSACTIONS,     "mining.get_transactions"},

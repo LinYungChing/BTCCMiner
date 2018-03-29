@@ -135,6 +135,22 @@ namespace tcp
         return std::string(buffer);
     }
 
+    std::string TCPClient::getline(char delim)
+    {
+        char buffer;
+        std::string line;
+        line.reserve(1024);
+
+        while(::recv(sock_number, &buffer, 1, 0) > 0)
+        {
+            if(buffer != delim)
+                line.push_back(buffer);
+            else
+                break;
+        }
+        return line;
+    }
+
 
     //Get Func
     std::string TCPClient::getAddress()   { return server_address; }

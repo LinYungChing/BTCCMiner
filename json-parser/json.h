@@ -254,7 +254,7 @@ typedef struct _json_value
    #endif
 
 } json_value;
-       
+
 json_value * json_parse (const json_char * json,
                          size_t length);
 

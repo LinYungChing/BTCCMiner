@@ -1,5 +1,7 @@
 #include "stratum.hpp"
 
+#include <limits>
+
 namespace stratum
 {
 
@@ -9,7 +11,8 @@ namespace stratum
     // Constructor
 
     Worker::Worker() :
-        client(), 
+        client(),
+        id_counter(1),
         connect_status(false)
     {
     }
@@ -17,6 +20,7 @@ namespace stratum
     Worker::Worker(const std::string &url, const int &port,
                    const std::string &username, const std::string &password) :
             client(),
+            id_counter(1),
             username(username),
             password(password),
             connect_status(false)
@@ -96,37 +100,78 @@ namespace stratum
         return this->connect_status;
     }
 
-
     // Private
+
+    int Worker::_get_counter(bool increase)
+    {
+        int id = this->id_counter;
+
+        if(increase)
+        {
+            this->id_counter++;
+
+            if(id_counter == std::numeric_limits<int>::max() )
+            {
+                this->id_counter = 1; 
+            }
+        }
+
+        return id;
+    }
+
+
+    Message Worker::_wait_for_specific_id(int id)
+    {
+        std::string reply;
+        while( (reply = this->client.getline()) != "")
+        {
+            Message msg(reply);
+            if(msg["id"] != NULL && msg["id"]->type == json_integer)
+            {
+                if(msg["id"]->u.integer == id)
+                {
+                    return msg;
+                }
+            }
+            msgqueue.push_back(msg);
+        }
+    }
+
 
     bool Worker::_subscribe()
     {
-        this->client.send(MsgParser::subscribe());
-        std::string reply = this->client.getline();
-        Message msg = MsgParser::parse(reply);
-        std::cout << MsgType::match_type(msg.getType()) << ": "
-                  << reply << std::endl;
+        int id = this->_get_counter();
+        this->client.send(MsgParser::subscribe(id));
 
-        reply = this->client.getline();
-        msg = MsgParser::parse(reply);
-        std::cout << MsgType::match_type(msg.getType()) << ": "
-                  << reply << std::endl;
-        
-        reply = this->client.getline();
-        msg = MsgParser::parse(reply);
-        std::cout << MsgType::match_type(msg.getType()) << ": "
-                  << reply << std::endl;
-        return true;
+        Message msg = this->_wait_for_specific_id(id);
+
+
+        std::cout << "Pool reply: " << msg.getJson() << std::endl;
+        std::cout << "  id: " << msg["id"] << std::endl;
+        std::cout << "  result: " << std::endl
+                  << "    extranonce1: " << msg["result"]->u.array.values[1] << std::endl
+                  << "    extranonce2_size: " << msg["result"]->u.array.values[2] << std::endl;
+        std::cout << "  error: " << msg["error"] << std::endl;
+
+
+        return msg["error"]->type == json_null;
     }
+
 
     bool Worker::_authorize()
     {
-        this->client.send(MsgParser::authorize(this->username, this->password));
-        std::string reply = this->client.getline();
-        Message msg = MsgParser::parse(reply);
-        std::cout << MsgType::match_type(msg.getType()) << ": "
-                  << reply << std::endl;
-        return true;
+        int id = this->_get_counter();
+        this->client.send(MsgParser::authorize(this->username, this->password, id));
+
+        Message msg = this->_wait_for_specific_id(id);
+
+        
+        std::cout << "Pool reply: " << msg.getJson() << std::endl;
+        std::cout << "  id: " << msg["id"] << std::endl;
+        std::cout << "  result: " << msg["result"] << std::endl;
+        std::cout << "  error: " << msg["error"] << std::endl;
+    
+        return msg["error"]->type == json_null && msg["result"]->u.boolean;
     }
 
     ////////////////////// Message ///////////////////
@@ -134,21 +179,22 @@ namespace stratum
     Message::Message() :
         _type(MsgType::NONE),
         json(),
-        value(NULL)
+        raw_value(NULL)
     {
     }
 
     Message::Message(const std::string &json) :
         _type(MsgType::NONE),
         json(json),
-        value(NULL)
+        raw_value(NULL)
     {
+        parse();
     }
 
     Message::Message(const Message &msg) :
         _type(msg._type),
         json(msg.json),
-        value(NULL)
+        raw_value(NULL)
     {
         parse();
     }
@@ -171,26 +217,35 @@ namespace stratum
 
     json_value *Message::getObject()
     {
-        return this->value;
+        return this->raw_value;
     }
 
     bool Message::parse()
     {
-        if(value != NULL)
-            json_value_free(value);
-        value = NULL;
-        this->value = json_parse(this->json.c_str(), this->json.size());
-        this->_parse_type();
-        return this->value != NULL;
+        if(this->raw_value != NULL)
+            json_value_free(this->raw_value);
+        this->raw_value = NULL;
+        this->raw_value = json_parse(this->json.c_str(), this->json.size());
+        this->_parse_field_and_type();
+        return this->raw_value != NULL;
     }
 
     void Message::clear()
     {
         _type = MsgType::NONE;
         json = std::string();
-        if(value != NULL)
-            json_value_free(value);
-        value = NULL;
+        if(this->raw_value != NULL)
+            json_value_free(this->raw_value);
+        this->raw_value = NULL;
+        this->field.clear();
+    }
+
+
+    json_value *Message::operator[](std::string fieldname)
+    {
+        if(this->field.find(fieldname) == this->field.end())
+            return NULL;
+        return this->field[fieldname];
     }
 
     Message &Message::operator=(const Message &msg)
@@ -203,22 +258,24 @@ namespace stratum
     }
 
     // Private
-    void Message::_parse_type()
+    void Message::_parse_field_and_type()
     {
-        if(this->value == NULL)
+        if(this->raw_value == NULL)
             return;
 
         this->_type = MsgType::UNKNOWN;
-        if(this->value->type == json_object)
-        {
-            for(int x=0;x<this->value->u.object.length; ++x)
-            {
-                if(std::string(this->value->u.object.values[x].name) == "method")
-                {
-                    std::string method(this->value->u.object.values[x].value->u.string.ptr);
 
-                    this->_type = MsgType::match_type(method);
-                    return;
+        if(this->raw_value->type == json_object)
+        {
+            for(int x=0;x<this->raw_value->u.object.length; ++x)
+            {
+                std::string fieldname(this->raw_value->u.object.values[x].name);
+                this->field[fieldname] = this->raw_value->u.object.values[x].value;
+
+                if(fieldname == "method")
+                {
+                    json_value *v = this->raw_value->u.object.values[x].value;
+                    this->_type = MsgType::match_type(v->u.string.ptr);
                 }
             }
         }

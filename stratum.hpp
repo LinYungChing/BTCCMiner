@@ -1,12 +1,17 @@
+#pragma once
+
 #include <iostream>
-#include <string>
-#include <map>
 #include <sstream>
+#include <string>
+
+#include <deque>
+#include <map>
 
 extern "C"{
 #include "json-parser/json.h"
 }
 
+#include "json_utils.hpp"
 #include "tcp_client.hpp"
 
 namespace stratum
@@ -54,6 +59,7 @@ namespace stratum
         static std::map<MsgType, std::string> t2s_mapping;
 
     };
+
     
 
     /////////////// Worker ///////////////////
@@ -66,10 +72,15 @@ namespace stratum
         std::string username;
         std::string password;
 
+        std::string subscription;
+
         bool connect_status;
 
         std::string extranonce1;
         int extranonce2_size;
+
+        std::deque<Message> msgqueue;
+        int id_counter;
 
     public:
         // Constructor
@@ -91,11 +102,16 @@ namespace stratum
         int getPort();
         std::string getUsername();
 
+        Message getMessage();
+
         // Overload
         explicit operator bool();
 
     private:
 
+        int _get_counter(bool increase=true);
+
+        Message _wait_for_specific_id(int id);
         bool _subscribe();
         bool _authorize();
     };
@@ -109,7 +125,9 @@ namespace stratum
         MsgType _type;
 
         std::string json;
-        json_value *value;
+        json_value *raw_value;
+        std::map< std::string, json_value* > field;
+
     public:
         Message();
         Message(const std::string &json);
@@ -125,12 +143,13 @@ namespace stratum
 
         void clear();
 
+        json_value* operator[](std::string fieldname);
         Message &operator=(const Message &msg);
 
         friend class MsgParser;
 
     private:
-        void _parse_type();
+        void _parse_field_and_type();
     };
 
 

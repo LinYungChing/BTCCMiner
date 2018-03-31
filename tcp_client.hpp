@@ -7,6 +7,7 @@ extern "C"{
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -52,8 +53,9 @@ namespace tcp
 
         // Send/Recv 
         bool        send(std::string data);
-        std::string recv(size_t size = 4096);
-        std::string getline(char delim = '\n');
+        bool        recv(std::string &data, size_t size = 4096);
+        bool        peek();
+        bool        getline(std::string &data, char delim = '\n');
 
         // Get Func
         std::string getAddress();

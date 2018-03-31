@@ -97,12 +97,26 @@ namespace stratum
         bool status();
         void close();
 
+        bool empty();
+        Message popMessage();
+        bool checkMessageByType(MsgType msgtype);
+        Message getMessageByType(MsgType msgtype);
+
+        bool updateMessageQueue();
+        MsgType getFirstMessageType();
+
+        // client to server function
+        bool authorize();
+        bool subscribe();
+        bool get_transactions(std::string &job_id);
+        bool submit(const std::string job_id, const std::string extranonce2,
+                    const std::string ntime, const std::string nonce);
+
         //get/set
         std::string getUrl();
         int getPort();
         std::string getUsername();
 
-        Message getMessage();
 
         // Overload
         explicit operator bool();
@@ -110,10 +124,12 @@ namespace stratum
     private:
 
         int _get_counter(bool increase=true);
-
         Message _wait_for_specific_id(int id);
-        bool _subscribe();
-        bool _authorize();
+
+        bool _reconnect();
+        bool _safe_send(std::string &msg);
+        bool _safe_recv(std::string &msg, size_t size = 4096);
+        bool _safe_getline(std::string &msg, char delim='\n');
     };
 
     ////////////// Message ///////////////////
@@ -146,7 +162,9 @@ namespace stratum
         json_value* operator[](std::string fieldname);
         Message &operator=(const Message &msg);
 
+        /// static ///
         friend class MsgParser;
+        static Message None();
 
     private:
         void _parse_field_and_type();
@@ -169,6 +187,8 @@ namespace stratum
                                   const std::string &ntime,
                                   const std::string &nonce,
                                   int id = 4);
+        static std::string get_transactions(const std::string &job_id,
+                                           int id = 5);
         static Message parse(const std::string &json_msg);
     private:
     };

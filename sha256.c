@@ -14,6 +14,8 @@
 #define _rotl(v, s) ((v)<<(s) | (v)>>(32-(s)))
 #define _rotr(v, s) ((v)>>(s) | (v)<<(32-(s)))
 
+#define _swap(x, y) (((x)^=(y)), ((y)^=(x)), ((x)^=(y)))
+
 #ifdef __cplusplus
 extern "C"{
 #endif  //__cplusplus
@@ -152,14 +154,14 @@ void sha256(SHA256 *ctx, const BYTE *msg, size_t len)
 	// Swap 1st & 4th, 2nd & 3rd byte for each word
 	for(i=0;i<32;i+=4)
 	{
-		ctx->hash8[i]   ^= ctx->hash8[i+3] ^= ctx->hash8[i]   ^= ctx->hash8[i+3];
-		ctx->hash8[i+1] ^= ctx->hash8[i+2] ^= ctx->hash8[i+1] ^= ctx->hash8[i+2];
+        _swap(ctx->b[i], ctx->b[i+3]);
+        _swap(ctx->b[i+1], ctx->b[i+2]);
 	}
 }
 
 // Unit test
 #ifdef __SHA256_UNITTEST__
-	#define print_hash(x) printf("sha256 hash: "); for(int i=0;i<32;++i)printf("%02X", (x).hash8[i]);
+	#define print_hash(x) printf("sha256 hash: "); for(int i=0;i<32;++i)printf("%02X", (x).b[i]);
 	#define print_msg(x) printf("%s", ((x) ? "Pass":"Failed"))
 
 int main(int argc, char **argv)
@@ -177,7 +179,7 @@ int main(int argc, char **argv)
 	sha256(&ctx, abc, abclen);
 	print_hash(ctx);
 	printf("\nResult: ");
-	print_msg(!memcmp(abcans, ctx.hash8, 32));
+	print_msg(!memcmp(abcans, ctx.b, 32));
 	printf("\n\n");
 	
 	// ------------------ Stage 2: len55
@@ -191,7 +193,7 @@ int main(int argc, char **argv)
 	sha256(&ctx, len55, len55len);
 	print_hash(ctx);
 	printf("\nResult: ");
-	print_msg(!memcmp(len55ans, ctx.hash8, 32));
+	print_msg(!memcmp(len55ans, ctx.b, 32));
 	printf("\n\n");
 	
 	// ------------------ Stage 3: len290
@@ -209,7 +211,7 @@ int main(int argc, char **argv)
 	sha256(&ctx, len290, len290len);
 	print_hash(ctx);
 	printf("\nResult: ");
-	print_msg(!memcmp(len290ans, ctx.hash8, 32));
+	print_msg(!memcmp(len290ans, ctx.b, 32));
 	printf("\n\n");
 	
 	return 0;

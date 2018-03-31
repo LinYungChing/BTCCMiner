@@ -2,6 +2,10 @@
 
 #include <limits>
 
+#ifndef _BTC_RETRY_CONNECTION_
+    #define _BTC_RETRY_CONNECTION_ 3
+#endif
+
 namespace stratum
 {
 
@@ -49,12 +53,12 @@ namespace stratum
             return false;
         }
 
-        if(!this->_subscribe())
+        if(!this->subscribe())
         {
             return false;
         }
 
-        if(!this->_authorize())
+        if(!this->authorize())
         {
             return false;
         }
@@ -62,6 +66,7 @@ namespace stratum
         return this->connect_status = true;
     }
 
+    
     bool Worker::status()
     {
         return this->connect_status;
@@ -76,6 +81,216 @@ namespace stratum
 
         this->connect_status = false;
     }
+
+    bool Worker::empty()
+    {
+        return msgqueue.empty();
+    }
+
+    Message Worker::popMessage()
+    {
+        if(msgqueue.empty())
+        {
+            return Message::None();
+        }
+        Message msg = msgqueue.front();
+        msgqueue.pop_front();
+        return msg;
+    }
+
+    bool Worker::checkMessageByType(MsgType msgtype)
+    {
+        auto it = msgqueue.begin();
+        for(it;it != msgqueue.end(); ++it)
+        {
+            if(it->getType() == msgtype)
+                return true;
+        }
+        return false;
+    }
+
+    Message Worker::getMessageByType(MsgType msgtype)
+    {
+        Message msg = Message::None();
+
+        auto it = msgqueue.begin();
+        for(it;it != msgqueue.end(); ++it)
+        {
+            if(it->getType() == msgtype)
+            {
+                msg = *it;
+                msgqueue.erase(it);
+                break;
+            }
+        }
+        return msg;
+    }
+
+    bool Worker::updateMessageQueue()
+    {
+        bool new_flag = false;
+        std::string reply;
+        if(!this->client.peek())
+        {
+            return new_flag;
+        }
+
+        while( this->_safe_getline(reply) && reply != "")
+        {
+            Message msg(reply);
+            new_flag = true;
+            msgqueue.push_back(msg);
+            std::cout << reply << std::endl;   //call_std::cout
+            reply.clear();
+        }
+
+        return new_flag;
+    }
+
+    MsgType Worker::getFirstMessageType()
+    {
+        return msgqueue.front().getType();
+    }
+
+    // client to server functions
+    bool Worker::submit(const std::string job_id, const std::string extranonce2,
+                        const std::string ntime, const std::string nonce)
+    {
+        int id = this->_get_counter();
+    #ifdef _DEBUG_
+        std::string string_msg = MsgParser::submit(this->username, job_id, extranonce2, 
+                                                   ntime, nonce, id);
+        std::cout << "Client: " << string_msg;  //call_std::cout
+        this->_safe_send(string_msg);
+    #else
+        this->_safe_send(MsgParser::submit(this->username,
+                                           job_id,
+                                           extranonce2,
+                                           ntime,
+                                           nonce,
+                                           id));
+    #endif
+
+        Message msg = this->_wait_for_specific_id(id);
+
+        if(msg.getType() == MsgType::NONE)
+        {
+            std::cout << "[in Worker::submit] Can't get server reply..." << std::endl;
+            return false;
+        }
+
+    #ifdef _DEBUG_
+        std::cout << "Server reply: " << msg.getJson() << std::endl; //call_std::cout
+
+        std::cout << "  id: " << msg["id"] << std::endl;
+        std::cout << "  result: " << msg["result"] << std::endl;
+        std::cout << "  error: " << msg["error"] << std::endl;
+    #endif
+
+        return msg["error"]->type == json_null && (bool)msg["result"]->u.boolean;
+    }
+
+
+    //authorize
+    bool Worker::authorize()
+    {
+        int id = this->_get_counter();
+
+    #ifdef _DEBUG_
+        std::string string_msg = MsgParser::authorize(this->username, this->password, id);
+        std::cout << "Client: " << string_msg; //call_std::cout
+
+        this->_safe_send(string_msg);
+    #else
+        this->_safe_send(MsgParser::authorize(this->username, this->password, id));
+    #endif
+
+        // wait for server reply
+        Message msg = this->_wait_for_specific_id(id);
+
+        if(msg.getType() == MsgType::NONE)
+        {
+            std::cout << "[in Worker::authorize] Can't get server reply..." << std::endl;
+            return false;
+        }
+
+    #ifdef _DEBUG_
+        std::cout << "Server reply: " << msg.getJson() << std::endl;  //call_std::cout
+
+        std::cout << "  id: " << msg["id"] << std::endl;
+        std::cout << "  result: " << msg["result"] << std::endl;
+        std::cout << "  error: " << msg["error"] << std::endl;
+    #endif
+
+        return msg["error"]->type == json_null && (bool)msg["result"]->u.boolean;
+    }
+
+
+    bool Worker::subscribe()
+    {
+
+        int id = this->_get_counter();
+    #ifdef _DEBUG_
+        std::string string_msg = MsgParser::subscribe(id);
+        std::cout << "Client: " << string_msg;  ////call_std::cout
+
+        this->_safe_send(string_msg);
+    #else
+        this->_safe_send(MsgParser::subscribe(id));
+    #endif
+
+
+        Message msg = this->_wait_for_specific_id(id);
+
+        if(msg.getType() == MsgType::NONE)
+        {
+            std::cout << "[in Worker::subscribe] Can't get server reply..." << std::endl;
+            return false;
+        }
+
+    #ifdef _DEBUG_
+        std::cout << "Server reply: " << msg.getJson() << std::endl;  //call_std::cout
+
+        std::cout << "  id: " << msg["id"] << std::endl;
+        std::cout << "  result: " << std::endl
+                  << "    extranonce1: " << msg["result"]->u.array.values[1] << std::endl
+                  << "    extranonce2_size: " << msg["result"]->u.array.values[2] << std::endl;
+        std::cout << "  error: " << msg["error"] << std::endl;
+    #endif
+
+        return msg["error"]->type == json_null;
+    }
+    
+    bool Worker::get_transactions(std::string &job_id)
+    {
+        int id = this->_get_counter();
+    #ifdef _DEBUG_
+        std::string string_msg = MsgParser::get_transactions(job_id, id);
+        std::cout << "Client: " << string_msg << std::endl; //call_str::cout
+
+        this->_safe_send(string_msg);
+    #else
+        this->_safe_send(MsgParser::get_transactions(job_id, id));
+    #endif
+
+        Message msg = this->_wait_for_specific_id(id);
+        if(msg.getType() == MsgType::NONE)
+        {
+            std::cout << "[in Worker::get_transactions] Can't get server reply..." << std::endl;
+            return false;
+        }
+
+    #ifdef _DEBUG_
+        std::cout << "Server reply: " << msg.getJson() << std::endl;
+
+        std::cout << "  id: " << msg["id"] << std::endl;
+        std::cout << "  result: " << msg["result"] << std::endl;
+        std::cout << "  error: " << msg["error"] << std::endl;
+    #endif
+
+        return true;
+    }
+
 
     //get/set
     std::string Worker::getUrl()
@@ -123,7 +338,7 @@ namespace stratum
     Message Worker::_wait_for_specific_id(int id)
     {
         std::string reply;
-        while( (reply = this->client.getline()) != "")
+        while( this->_safe_getline(reply) && reply != "")
         {
             Message msg(reply);
             if(msg["id"] != NULL && msg["id"]->type == json_integer)
@@ -134,46 +349,67 @@ namespace stratum
                 }
             }
             msgqueue.push_back(msg);
+            reply.clear();
         }
+        return Message::None();
     }
 
 
-    bool Worker::_subscribe()
+    bool Worker::_reconnect()
     {
-        int id = this->_get_counter();
-        this->client.send(MsgParser::subscribe(id));
-
-        Message msg = this->_wait_for_specific_id(id);
-
-
-        std::cout << "Pool reply: " << msg.getJson() << std::endl;
-        std::cout << "  id: " << msg["id"] << std::endl;
-        std::cout << "  result: " << std::endl
-                  << "    extranonce1: " << msg["result"]->u.array.values[1] << std::endl
-                  << "    extranonce2_size: " << msg["result"]->u.array.values[2] << std::endl;
-        std::cout << "  error: " << msg["error"] << std::endl;
-
-
-        return msg["error"]->type == json_null;
+        //pass
     }
 
-
-    bool Worker::_authorize()
+    bool Worker::_safe_send(std::string &msg)
     {
-        int id = this->_get_counter();
-        this->client.send(MsgParser::authorize(this->username, this->password, id));
+        int failed = 0;
+        while(!this->client.send(msg) && failed < _BTC_RETRY_CONNECTION_)
+        {
+            failed++;
+            std::cout << "[in Worker::_safe_send] Failed to send msg to Server..." << std::endl;  //call_std::cout
+            std::cout << "[in Worker::_safe_send] reconnect " << failed << std::endl; //call_std::cout
+            _reconnect();
+        }
 
-        Message msg = this->_wait_for_specific_id(id);
+        if(failed >= 5)
+            return false;
+        return true;
+    }
 
+    bool Worker::_safe_recv(std::string &msg, size_t size)
+    {
+        int failed = 0;
+        while(!this->client.recv(msg) && failed < _BTC_RETRY_CONNECTION_)
+        {
+            failed++;
+            std::cout << "[in Worker::_safe_recv] Failed to recv msg from Server..." << std::endl;//call_std::cout
+            std::cout << "[in Worker::_safe_recv] reconnect " << failed << std::endl;//call_std::cout
+            _reconnect();
+        }
+
+        if(failed >= 5)
+            return false;
+        return true;
+    }
+
+    bool Worker::_safe_getline(std::string &msg, char delim)
+    {
+        int failed = 0;
+        while(!this->client.getline(msg, delim) && failed < _BTC_RETRY_CONNECTION_)
+        {
+            failed++;
+            std::cout << "[in Worker::_safe_getline] Failed to recv msg from Server..." << std::endl; //call_std::cout
+            std::cout << "[in Worker::_safe_getline] reconnect " << failed << std::endl;//call_std::cout
+            _reconnect();
+        }
         
-        std::cout << "Pool reply: " << msg.getJson() << std::endl;
-        std::cout << "  id: " << msg["id"] << std::endl;
-        std::cout << "  result: " << msg["result"] << std::endl;
-        std::cout << "  error: " << msg["error"] << std::endl;
-    
-        return msg["error"]->type == json_null && msg["result"]->u.boolean;
+        
+        if(failed >= 5)
+            return false;
+        return true;
     }
-
+    
+    
     ////////////////////// Message ///////////////////
 
     Message::Message() :
@@ -223,10 +459,16 @@ namespace stratum
     bool Message::parse()
     {
         if(this->raw_value != NULL)
+        {
+            this->field.clear();
             json_value_free(this->raw_value);
+        }
         this->raw_value = NULL;
         this->raw_value = json_parse(this->json.c_str(), this->json.size());
-        this->_parse_field_and_type();
+        if(this->raw_value != NULL)
+            this->_parse_field_and_type();
+        else
+            this->_type = MsgType::NONE;
         return this->raw_value != NULL;
     }
 
@@ -253,8 +495,15 @@ namespace stratum
         this->clear();
         this->_type = msg._type;
         this->json = msg.json;
-        this->parse();
+            this->parse();
         return *this;
+    }
+
+    Message Message::None()
+    {
+        Message msg;
+        msg._type = MsgType::NONE;
+        return msg;
     }
 
     // Private
@@ -325,6 +574,19 @@ namespace stratum
                                 << extranonce2 << "\", \""
                                 << ntime << "\", \""
                                 << nonce << "\"], "
+           << "\"id\": " << id
+           << "}\n";
+
+        return ss.str();
+    }
+
+    std::string MsgParser::get_transactions(const std::string &job_id,
+                                           int id)
+    {
+        std::stringstream ss;
+        ss << "{"
+           << "\"method\": \"" << MsgType::match_type(MsgType::GET_TRANSACTIONS) << "\", "
+           << "\"params\": [\""  << job_id << "\"],"
            << "\"id\": " << id
            << "}\n";
 
@@ -408,7 +670,6 @@ namespace stratum
 }
 
 // UNITTEST
-#define __STRATUM_UNITTEST__
 #ifdef __STRATUM_UNITTEST__
 
 int main(int argc, char **argv)
@@ -419,6 +680,40 @@ int main(int argc, char **argv)
     {
         std::cout << "Failed to connect to slushpool..." << std::endl;
     }
+
+    stratum::Message msg = worker.popMessage();
+
+    while(msg.getType() != stratum::MsgType::NONE)
+    {
+
+        if(msg.getType() == stratum::MsgType::SET_DIFFICULTY)
+        {
+            std::cout << "set_difficulty \n" ;
+            std::cout << "  : " << msg.getJson();
+        }
+        if(msg.getType() == stratum::MsgType::NOTIFY)
+        {
+            std::cout << "notify \n";
+            std::cout << "  : " << msg.getJson();
+
+            std::string job_id = msg["params"]->u.array.values[0]->u.string.ptr;
+            std::string extranonce2 = "00000000";
+            std::string ntime = msg["params"]->u.array.values[7]->u.string.ptr;
+            std::string nonce = "e8832204";
+        
+            std::cout << "submit \n";
+            std::cout << "  job_id: " << job_id << std::endl
+                      << "  extranonce2: " << extranonce2 << std::endl
+                      << "  ntime: " << ntime << std::endl
+                      << "  nonce: " << nonce << std::endl;
+            worker.submit(job_id, extranonce2, ntime, nonce);
+        }
+        msg = worker.popMessage();
+    }
+
+    std::cout << "close worker" << std::endl;
+    worker.close();
+
 
     return 0;
 }

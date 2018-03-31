@@ -13,7 +13,7 @@ typedef unsigned char BYTE;
 
 typedef union _sha256_ctx{
 	WORD h[8];
-	BYTE hash8[32];
+	BYTE b[32];
 }SHA256;
 
 //----------- FUNCTION DECLARATION --------

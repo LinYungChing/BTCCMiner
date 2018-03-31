@@ -118,7 +118,7 @@ namespace tcp
         return true;
     }
 
-    std::string TCPClient::recv(size_t size)
+    bool TCPClient::recv(std::string &data, size_t size)
     {
         char buffer[size+1];
         memset(&buffer[0], 0, sizeof(buffer));
@@ -127,28 +127,55 @@ namespace tcp
 
         if( count < 0)
         {
-            ERROR_RECONN(CONNECTION_ERROR, "Failed to recv message from the server");
-            return nullptr;
+            ERROR_RECONN(CONNECTION_ERROR, "Failed to recv message from server");
+            return false;
         }
 
         buffer[count] = '\0';
-        return std::string(buffer);
+        data = buffer;
+        return true;
     }
 
-    std::string TCPClient::getline(char delim)
+    bool TCPClient::peek()
+    {
+        char buffer;
+        if(::recv(sock_number, &buffer, 1, MSG_PEEK | MSG_DONTWAIT) > 0)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    bool TCPClient::getline(std::string &data, char delim)
     {
         char buffer;
         std::string line;
         line.reserve(1024);
 
-        while(::recv(sock_number, &buffer, 1, 0) > 0)
+        char num_available;
+
+        int count = 1;
+        while(count > 0)
         {
-            if(buffer != delim)
-                line.push_back(buffer);
-            else
-                break;
+            count = ::recv(sock_number, &buffer, 1, 0);
+            
+            if(count < 0)
+            {
+                ERROR_RECONN(CONNECTION_ERROR, "Failed to getline from server");
+                return false;
+            }
+            if(count > 0)
+            {
+                if(buffer != delim)
+                    line.push_back(buffer);
+                else 
+                    break;
+            }
         }
-        return line;
+
+        data = line;
+
+        return true;
     }
 
 
@@ -167,7 +194,8 @@ namespace tcp
     bool TCPClient::_connect()
     {
         // create socket
-        sock_number = socket(AF_INET, SOCK_STREAM, 0);
+        sock_number = socket(PF_INET, SOCK_STREAM, 0);
+
         if(sock_number == -1)
         {
             ERROR_CALL(SOCKET_ERROR, "Failed to create socket");
@@ -179,8 +207,11 @@ namespace tcp
         sock_info.sin_port = htons(this->server_port);
         if(connect(sock_number, (struct sockaddr *)&sock_info, sizeof(sock_info)) < 0)
         {
-            ERROR_CALL(CONNECTION_ERROR, "Failed to connect to the server");
-            return false;
+            if(errno != EINPROGRESS)
+            {
+                ERROR_CALL(CONNECTION_ERROR, "Failed to connect to the server");
+                return false;
+            }
         }
 
         return this->connect_status = true;
@@ -205,9 +236,18 @@ int main(int argc, char **argv)
     }
 
     client.send("Hello");
-    std::string str = client.recv(10);
-    std::cout << "Recv: " << str << std::endl;
 
+    std::string str;
+    bool ret = client.recv(str, 10);
+    
+    if(ret)
+    {
+        std::cout << "Recv: " << str << std::endl;
+    }
+    else
+    {
+        std::cout << "error" << std::endl;
+    }
     client.close();
 
     return 0;

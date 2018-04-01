@@ -76,8 +76,9 @@ namespace stratum
 
         bool connect_status;
 
-        std::string extranonce1;
+        std::string extranonce;
         int extranonce2_size;
+        unsigned int difficulty;
 
         std::deque<Message> msgqueue;
         int id_counter;
@@ -117,6 +118,13 @@ namespace stratum
         int getPort();
         std::string getUsername();
 
+        std::string getExtranonce();
+        int getExtranonce2Size();
+        unsigned int getDifficulty();
+
+        void setExtranonce(const std::string &enonce);
+        void setExtranonce2Size(const int enonce2_size);
+        void setDifficulty(const unsigned int diff);
 
         // Overload
         explicit operator bool();

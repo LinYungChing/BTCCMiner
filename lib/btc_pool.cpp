@@ -85,8 +85,9 @@ namespace btc
             b.nbits = msg["params"]->u.array.values[6]->u.string.ptr;
             b.ntime = msg["params"]->u.array.values[7]->u.string.ptr;
             b.clean_job = (bool)msg["params"]->u.array.values[8]->u.boolean;
-            b.extranonce1 = this->extranonce;
-            b.difficulty = this->difficulty;
+            b.extranonce1 = this->stratum_pool.getExtranonce();
+            b.difficulty = this->stratum_pool.getDifficulty();
+            b.extranonce2_size = this->stratum_pool.getExtranonce2Size();
         }
 
         return b;
@@ -111,12 +112,17 @@ namespace btc
 
     std::string StratumPool::getExtranonce()
     {
-        return extranonce;
+        return this->stratum_pool.getExtranonce();
     }
 
     unsigned int StratumPool::getDifficulty()
     {
-        return difficulty;
+        return this->stratum_pool.getDifficulty();
+    }
+
+    int StratumPool::getExtranonce2Size()
+    {
+        return this->stratum_pool.getExtranonce2Size();
     }
 
     //private
@@ -124,14 +130,21 @@ namespace btc
     bool StratumPool::_set_extranonce(std::string enonce)
     {
         std::cout << "Update extranonce1: " << enonce << std::endl; //call_std::cout
-        extranonce = enonce;
+        this->stratum_pool.setExtranonce(enonce);
         return true;
     }
 
     bool StratumPool::_set_difficulty(unsigned int dif)
     {
         std::cout << "Update difficulty: " << dif << std::endl; //call_std::cout
-        difficulty = dif;
+        this->stratum_pool.setDifficulty(dif);
+        return true;
+    }
+
+    bool StratumPool::_set_extranonce2_size(int size)
+    {
+        std::cout << "Update extranonce2 size: " << size << std::endl; // call_std::cout
+        this->stratum_pool.setExtranonce2Size(size);
         return true;
     }
 
@@ -166,7 +179,6 @@ namespace btc
 }
 
 // UNITTEST
-#define __STRATUM_POOL_UNITTEST__
 #ifdef __STRATUM_POOL_UNITTEST__
 
 int main(int argc, char **argv)
@@ -206,6 +218,8 @@ int main(int argc, char **argv)
 
     block.extranonce2 = "00000000";
     block.nonce = "e8832204";
+
+    pool.get_transactions(block.job_id);
 
     if(pool.submit(block))
     {

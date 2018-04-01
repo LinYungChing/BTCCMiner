@@ -26,7 +26,8 @@ namespace btc
         std::string extranonce2;
         std::string nonce;
         bool clean_job;
-        int difficulty;
+        unsigned int difficulty;
+        int extranonce2_size;
 
         BTCBlock();
         bool valid();
@@ -53,8 +54,6 @@ namespace btc
     {
     private:
         stratum::Worker stratum_pool;
-        std::string extranonce;
-        unsigned int difficulty;
 
     public:
         // constructor
@@ -82,6 +81,7 @@ namespace btc
         //get/set
         std::string getExtranonce();
         unsigned int getDifficulty();
+        int getExtranonce2Size();
 
         // Overload
         explicit operator bool();
@@ -89,6 +89,7 @@ namespace btc
     private:
         bool _set_extranonce(std::string enonce);
         bool _set_difficulty(unsigned int dif);
+        bool _set_extranonce2_size(int size);
         bool _flush_msgqueue_until_next_block();
     };
 

@@ -157,19 +157,12 @@ namespace stratum
                         const std::string ntime, const std::string nonce)
     {
         int id = this->_get_counter();
-    #ifdef _DEBUG_
         std::string string_msg = MsgParser::submit(this->username, job_id, extranonce2, 
                                                    ntime, nonce, id);
+    #ifdef _DEBUG_
         std::cout << "Client: " << string_msg;  //call_std::cout
-        this->_safe_send(string_msg);
-    #else
-        this->_safe_send(MsgParser::submit(this->username,
-                                           job_id,
-                                           extranonce2,
-                                           ntime,
-                                           nonce,
-                                           id));
     #endif
+        this->_safe_send(string_msg);
 
         Message msg = this->_wait_for_specific_id(id);
 
@@ -196,14 +189,11 @@ namespace stratum
     {
         int id = this->_get_counter();
 
-    #ifdef _DEBUG_
         std::string string_msg = MsgParser::authorize(this->username, this->password, id);
+    #ifdef _DEBUG_
         std::cout << "Client: " << string_msg; //call_std::cout
-
-        this->_safe_send(string_msg);
-    #else
-        this->_safe_send(MsgParser::authorize(this->username, this->password, id));
     #endif
+        this->_safe_send(string_msg);
 
         // wait for server reply
         Message msg = this->_wait_for_specific_id(id);
@@ -230,14 +220,11 @@ namespace stratum
     {
 
         int id = this->_get_counter();
-    #ifdef _DEBUG_
         std::string string_msg = MsgParser::subscribe(id);
+    #ifdef _DEBUG_
         std::cout << "Client: " << string_msg;  ////call_std::cout
-
-        this->_safe_send(string_msg);
-    #else
-        this->_safe_send(MsgParser::subscribe(id));
     #endif
+        this->_safe_send(string_msg);
 
 
         Message msg = this->_wait_for_specific_id(id);
@@ -247,6 +234,9 @@ namespace stratum
             std::cout << "[in Worker::subscribe] Can't get server reply..." << std::endl;
             return false;
         }
+
+        this->setExtranonce(msg["result"]->u.array.values[1]->u.string.ptr);
+        this->setExtranonce2Size(msg["result"]->u.array.values[2]->u.integer);
 
     #ifdef _DEBUG_
         std::cout << "Server reply: " << msg.getJson() << std::endl;  //call_std::cout
@@ -264,14 +254,13 @@ namespace stratum
     bool Worker::get_transactions(std::string &job_id)
     {
         int id = this->_get_counter();
-    #ifdef _DEBUG_
         std::string string_msg = MsgParser::get_transactions(job_id, id);
+
+    #ifdef _DEBUG_
         std::cout << "Client: " << string_msg << std::endl; //call_str::cout
+    #endif
 
         this->_safe_send(string_msg);
-    #else
-        this->_safe_send(MsgParser::get_transactions(job_id, id));
-    #endif
 
         Message msg = this->_wait_for_specific_id(id);
         if(msg.getType() == MsgType::NONE)
@@ -306,6 +295,36 @@ namespace stratum
     std::string Worker::getUsername()
     {
         return this->username;
+    }
+
+    std::string Worker::getExtranonce()
+    {
+        return this->extranonce;
+    }
+
+    int Worker::getExtranonce2Size()
+    {
+        return this->extranonce2_size;
+    }
+
+    unsigned int Worker::getDifficulty()
+    {
+        return this->difficulty;
+    }
+
+    void Worker::setExtranonce(const std::string &enonce)
+    {
+        this->extranonce = enonce;
+    }
+
+    void Worker::setExtranonce2Size(const int enonce2_size)
+    {
+        this->extranonce2_size = enonce2_size;
+    }
+
+    void Worker::setDifficulty(const unsigned int diff)
+    {
+        this->difficulty = diff;
     }
 
     // Overload

@@ -26,7 +26,6 @@ typedef struct _block
     unsigned int ntime;
     unsigned int nbits;
     unsigned int nonce;
-    unsigned char padding[];
 }HashBlock;
 
 //convert big/little endian

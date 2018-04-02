@@ -37,17 +37,6 @@ typedef struct _block
 
 ////////////////////////   Utils   ///////////////////////
 
-//convert big/little endian
-void swap_endian(unsigned char* byte, size_t len)
-{
-    for(size_t c = 0;c<len/2;++c)
-    {
-        byte[c] ^= byte[len-(c+1)];
-        byte[len-(c+1)] ^= byte[c];
-        byte[c] ^= byte[len-(c+1)];
-    }
-}
-
 //convert one hex-codec char to binary
 unsigned char decode(unsigned char c)
 {
@@ -77,9 +66,14 @@ unsigned char decode(unsigned char c)
 // string_len: the length of the input string
 //      '\0' is not included in string_len!!!
 // out: output bytes array
-void convert_string_to_byte(unsigned char* out, unsigned char *in, size_t string_len)
+void convert_string_to_little_endian_bytes(unsigned char* out, unsigned char *in, size_t string_len)
 {
-    for(size_t s = 0, b = 0;s < string_len; s+=2, ++b)
+    assert(string_len % 2 == 0);
+
+    size_t s = 0;
+    size_t b = string_len/2-1;
+
+    for(s, b; s < string_len; s+=2, --b)
     {
         out[b] = (unsigned char)(decode(in[s])<<4) + decode(in[s+1]);
     }
@@ -152,8 +146,8 @@ void calc_merkle_root(unsigned char *root, unsigned char branch[][65], size_t co
     for(int i=1;i<total_count; ++i)
     {
         list[i] = raw_list + i * 32;
-        convert_string_to_byte(list[i], branch[i-1], 64);  //convert hex string to bytes array and store them to the list
-        swap_endian(list[i], 32);  //big-endian to little-endian
+        //convert hex string to bytes array and store them into the list
+        convert_string_to_little_endian_bytes(list[i], branch[i-1], 64);
     }
 
     list[total_count] = raw_list + total_count*32;
@@ -165,7 +159,13 @@ void calc_merkle_root(unsigned char *root, unsigned char branch[][65], size_t co
         
         // hash each pair
         int i, j;
-        for(i=0, j=0;i<total_count-1;i+=2, ++j)
+
+        if(total_count % 2 == 1)  //odd, 
+        {
+            memcpy(list[total_count], list[total_count-1], 32);
+        }
+
+        for(i=0, j=0;i<total_count;i+=2, ++j)
         {
             // this part is slightly tricky,
             //   because of the implementation of the double_sha256,
@@ -176,12 +176,6 @@ void calc_merkle_root(unsigned char *root, unsigned char branch[][65], size_t co
             double_sha256((SHA256*)list[j], list[i], 64);
         }
 
-        if(total_count % 2 == 1)  //odd,
-        {
-            memcpy(list[i+1], list[i], 32);
-            double_sha256((SHA256*)list[j], list[i], 64);
-            ++j;
-        }
         total_count = j;
     }
 
@@ -212,8 +206,7 @@ int main(int argc, char **argv)
     unsigned char merkle_root[32];                  //merkle root
 
     // convert coinbase to byte & swap endian
-    convert_string_to_byte(coinbase_bin, hashed_coinbase, 64);
-    swap_endian(coinbase_bin, 32);
+    convert_string_to_little_endian_bytes(coinbase_bin, hashed_coinbase, 64);
 
     // calculate merkle root
     calc_merkle_root(merkle_root, merkle_branch, branch_count, coinbase_bin);
@@ -237,11 +230,9 @@ int main(int argc, char **argv)
     // Block #286819
     // from Block Explorer
     unsigned char prevhash[] = "000000000000000117c80378b8da0e33559b5997f2ad55e2f7d18ec1975b9717";  //big-endian
-    //unsigned char merkle_root[] = "871714dcbae6c8193a2bb9b2a69fe1c0440399f38d94b3a0f1b447275a29978a";  //big-endian
     unsigned char version[] = "00000002";  //big-endian
     unsigned char nbits[] =   "19015f53";  //big-endian
     unsigned char ntime[] =   "53058b35";  //big-endian  // 2014-02-20 04:57:25
-    unsigned int nonce = 0;  //the answer is "33087548" in hex, which is equal to 856192328 in dec.
     
     //print block info
     printf("Block info (big): \n");
@@ -250,21 +241,20 @@ int main(int argc, char **argv)
     printf("  merkleroot: "); print_hex_inverse(merkle_root, 32); printf("\n");
     printf("  nbits:      %s\n", nbits);
     printf("  ntime:      %s\n", ntime);
-    printf("  nonce:      ???\n");
-    printf("\n");
+    printf("  nonce:      ???\n\n");
     
     HashBlock block;
 
-    // convert to byte array
-    convert_string_to_byte((unsigned char *)&block.version, version,   8);
-    convert_string_to_byte(block.prevhash,                  prevhash,    64);
+    // convert to byte array in little-endian
+    convert_string_to_little_endian_bytes((unsigned char *)&block.version, version,   8);
+    convert_string_to_little_endian_bytes(block.prevhash,                  prevhash,    64);
     memcpy(block.merkle_root, merkle_root, 32);
-    convert_string_to_byte((unsigned char *)&block.nbits,   nbits,     8);
-    convert_string_to_byte((unsigned char *)&block.ntime,   ntime,     8);
-    block.nonce = nonce;
+    convert_string_to_little_endian_bytes((unsigned char *)&block.nbits,   nbits,     8);
+    convert_string_to_little_endian_bytes((unsigned char *)&block.ntime,   ntime,     8);
     
-    //convert nbits to little endian
-    swap_endian((unsigned char*)&block.nbits, 4);
+    // the answer is "33087548" in hex, which is equal to 856192328 in dec.
+    block.nonce = 0;
+    
     
     // ********** calculate target value *********
     // calculate target value from encoded difficulty which is encoded on "nbits"
@@ -287,30 +277,17 @@ int main(int argc, char **argv)
     print_hex_inverse(target_hex, 32);
     printf("\n");
     
-    
-    // back up 
-    HashBlock block_lit;
-    memcpy(&block_lit, &block, sizeof(block));
-
-    // convert all field from big endian to little endian
-    swap_endian((unsigned char*)&block_lit.version, 4);
-    swap_endian((unsigned char*) block_lit.prevhash, 32);
-    swap_endian((unsigned char*)&block_lit.ntime, 4);
-    
-    
     SHA256 sha256_ctx;
     
-    for(nonce=NONCE_START_VALUE; nonce<=0xffffffff;++nonce)
-    {
-        block_lit.nonce = nonce;  // Notice!! unsigned int is stored in little-endian so we dont need to convert this
-        
+    for(block.nonce=NONCE_START_VALUE; block.nonce<=0xffffffff;++block.nonce)
+    {   
         //sha256d
-        double_sha256(&sha256_ctx, (unsigned char*)&block_lit, sizeof(block_lit));
-        printf("hash (%d): ", nonce);
+        double_sha256(&sha256_ctx, (unsigned char*)&block, sizeof(block));
+        printf("hash #%10d (big): ", block.nonce);
         print_hex_inverse(sha256_ctx.b, 32);
         printf("\n");
         
-        if(little_endian_bit_comparison(sha256_ctx.b, target_hex, 32) < 0)  // sha256)ctx < target_hex
+        if(little_endian_bit_comparison(sha256_ctx.b, target_hex, 32) < 0)  // sha256_ctx < target_hex
         {
             printf("Found Solution!!\n\n");
             break;
@@ -320,18 +297,20 @@ int main(int argc, char **argv)
 
     // print result
     printf("Block #286819\n");
+
     //little-endian
     printf("hash(little): ");
     print_hex(sha256_ctx.b, 32);
     printf("\n");
 
-    swap_endian(sha256_ctx.b, sizeof(sha256_ctx));
-
     //big-endian
     printf("hash(big):    ");
-    print_hex(sha256_ctx.b, 32);
-    printf("\n\n");
-    printf("Block Explorer: \n");
+    print_hex_inverse(sha256_ctx.b, 32);
+    printf("\n");
+
+    printf("answer:       0000000000000000e067a478024addfecdc93628978aa52d91fabd4292982a50\n\n");
+
+    printf("from Block Explorer: \n");
     printf("https://blockexplorer.com/block/"
                 "0000000000000000e067a478024addfecdc93628978aa52d91fabd4292982a50\n\n");
 

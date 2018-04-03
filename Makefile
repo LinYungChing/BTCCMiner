@@ -22,7 +22,7 @@ OBJ_DIR = obj
 INCLUDE_DIR = include
 
 # modules
-MODULES = btc json_parser tcp
+MODULES = btc json-parser tcp
 MODULE_DIR = $(addprefix $(SRC_DIR)/,$(MODULES))
 
 
@@ -35,6 +35,7 @@ HEADER_FILES := $(shell find $(SRC_DIR) -name '*.hpp')\
 
 OBJ_FILES := $(SRC_FILES:%.c=%.o)
 OBJ_FILES := $(OBJ_FILES:%.cpp=%.o)
+OBJ_FILES := $(addprefix $(OBJ_DIR)/, $(notdir $(OBJ_FILES)))
 
 # target & executable
 EXECUTABLE = main
@@ -56,7 +57,6 @@ all: $(HEADER_TARGETS) $(EXECUTABLE) $(CXXTARGETS)
 .PHONY: debug
 debug: LDFLAGS+=-D_DEBUG_
 debug: all	
-	
 
 #===== Create include directory ====
 
@@ -81,17 +81,17 @@ $(CXXTARGETS): %: %.cpp
 
 #====== Build Object File =====
 
-%.o: %.cpp $(OBJ_DIR)
-	$(eval OBJ_TARGET := $(addprefix $(OBJ_DIR)/,$(notdir $@)))
-	$(CXX) $(CXXFLAGS) -c $< -o $(OBJ_TARGET) $(LDFLAGS)
+$(OBJ_DIR)/%.o: %.cpp $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LDFLAGS)
 
-%.o: %.c $(OBJ_DIR)
-	$(eval OBJ_TARGET := $(addprefix $(OBJ_DIR)/,$(notdir $@)))
-	$(CC) $(CFLAGS) -c $< -o $(OBJ_TARGET) $(LDFLAGS)
+$(OBJ_DIR)/%.o: %.c $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@ $(LDFLAGS)
 
 $(OBJ_DIR):
 	@mkdir -p $(OBJ_DIR)
 
+
+#======= Clean =========
 
 .PHONY: clean
 clean:

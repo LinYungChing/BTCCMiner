@@ -16,7 +16,7 @@
 
 #include "sha256.h"
 
-#include "offline_demo.mkrt" //merkle branch data (#286819)
+#include "merkle_branch.txt" //merkle branch data (#286819)
 
 #define NONCE_START_VALUE 0x33087540
 

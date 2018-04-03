@@ -26,16 +26,6 @@ typedef struct _block
     unsigned int nonce;
 }HashBlock;
 
-//convert big/little endian
-void swap_endian(unsigned char* byte, size_t len)
-{
-    for(size_t c = 0;c<len/2;++c)
-    {
-        byte[c] ^= byte[len-(c+1)];
-        byte[len-(c+1)] ^= byte[c];
-        byte[c] ^= byte[len-(c+1)];
-    }
-}
 
 //convert one hex-codec char to binary
 unsigned char decode(unsigned char c)
@@ -66,9 +56,14 @@ unsigned char decode(unsigned char c)
 // string_len: the length of the input string
 //      '\0' is not included in string_len!!!
 // out: output bytes array
-void convert_string_to_byte(unsigned char* out, unsigned char *in, size_t string_len)
+void convert_string_to_little_endian_bytes(unsigned char* out, unsigned char *in, size_t string_len)
 {
-    for(size_t s = 0, b = 0;s < string_len; s+=2, ++b)
+    assert(string_len % 2 == 0);
+
+    size_t s = 0;
+    size_t b = string_len/2 - 1;
+
+    for(s, b;s < string_len; s+=2, --b)
     {
         out[b] = (unsigned char)(decode(in[s])<<4) + decode(in[s+1]);
     }
@@ -78,6 +73,15 @@ void convert_string_to_byte(unsigned char* out, unsigned char *in, size_t string
 void print_hex(unsigned char* hex, size_t len)
 {
     for(int i=0;i<len;++i)
+    {
+        printf("%02x", hex[i]);
+    }
+}
+
+void print_hex_inverse(unsigned char* hex, size_t len)
+{
+
+    for(int i=len-1;i>=0;--i)
     {
         printf("%02x", hex[i]);
     }
@@ -117,30 +121,18 @@ int main(int argc, char **argv)
     HashBlock block;
 
     // convert to little endian
-    convert_string_to_byte((unsigned char *)&block.version, version,   8);
-    convert_string_to_byte(block.prevhash,                  prevhash,    64);
-    convert_string_to_byte(block.merkle_root,               merkle_root, 64);
-    convert_string_to_byte((unsigned char *)&block.nbits,   nbits,     8);
-    convert_string_to_byte((unsigned char *)&block.ntime,   ntime,     8);
-    convert_string_to_byte((unsigned char *)&block.nonce,   nonce,     8);
-
-    // back up 
-    HashBlock block_lit;
-    memcpy(&block_lit, &block, sizeof(block));
-
-    // convert all field from big endian to little endian
-    swap_endian((unsigned char*)&block_lit.version, 4);
-    swap_endian((unsigned char*) block_lit.prevhash, 32);
-    swap_endian((unsigned char*) block_lit.merkle_root, 32);
-    swap_endian((unsigned char*)&block_lit.ntime, 4);
-    swap_endian((unsigned char*)&block_lit.nbits, 4);
-    swap_endian((unsigned char*)&block_lit.nonce, 4);
+    convert_string_to_little_endian_bytes((unsigned char *)&block.version, version,   8);
+    convert_string_to_little_endian_bytes(block.prevhash,                  prevhash,    64);
+    convert_string_to_little_endian_bytes(block.merkle_root,               merkle_root, 64);
+    convert_string_to_little_endian_bytes((unsigned char *)&block.nbits,   nbits,     8);
+    convert_string_to_little_endian_bytes((unsigned char *)&block.ntime,   ntime,     8);
+    convert_string_to_little_endian_bytes((unsigned char *)&block.nonce,   nonce,     8);
 
     
     SHA256 sha256_ctx;
 
     //sha256d
-    double_sha256(&sha256_ctx, (unsigned char*)&block_lit, sizeof(block_lit));
+    double_sha256(&sha256_ctx, (unsigned char*)&block, sizeof(block));
 
 
     // print result
@@ -150,11 +142,9 @@ int main(int argc, char **argv)
     print_hex(sha256_ctx.b, 32);
     printf("\n");
 
-    swap_endian(sha256_ctx.b, sizeof(sha256_ctx));
-
     //big-endian
     printf("hash(big):    ");
-    print_hex(sha256_ctx.b, 32);
+    print_hex_inverse(sha256_ctx.b, 32);
     printf("\n\n");
     printf("Block Explorer: \n");
     printf("https://blockexplorer.com/block/"

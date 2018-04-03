@@ -26,8 +26,8 @@ MODULES = btc json-parser tcp
 MODULE_DIR = $(addprefix $(SRC_DIR)/,$(MODULES))
 
 
-SRC_FILES := $(shell find $(SRC_DIR) -name '*.cpp')\
-			 $(shell find $(SRC_DIR) -name '*.c')
+SRC_FILES := $(shell find $(SRC_DIR) -maxdepth 2 -name '*.cpp')\
+			 $(shell find $(SRC_DIR) -maxdepth 2 -name '*.c')
 
 HEADER_FILES := $(shell find $(SRC_DIR) -name '*.hpp')\
 				$(shell find $(SRC_DIR) -name '*.h')

@@ -1,12 +1,12 @@
 CXX = g++
 LDFLAGS = -lm
-CXXFLAGS = -O3 -std=c++11 -I./tools/lib/json/include
+CXXFLAGS = -O3 -std=c++11 -I./lib/json/include
 TARGETS = converter
 
 .PHONY: all
 all: $(TARGETS)
 
-%: tools/%.cpp
+%: %.cpp
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 
 .PHONY: clean

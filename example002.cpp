@@ -206,7 +206,6 @@ void solve(FILE *fin, FILE *fout)
         merkle_branch[i] = raw_merkle_branch + i * 65;
         getline(merkle_branch[i], 65, fin);
         merkle_branch[i][64] = '\0';
-        fprintf(fout, "  \"%s\",\n", merkle_branch[i]);
     }
 
     // **** calculate merkle root ****
@@ -263,14 +262,17 @@ void solve(FILE *fin, FILE *fout)
     printf("Target value (big): ");
     print_hex_inverse(target_hex, 32);
     printf("\n");
+
+
+    // ********** find nonce **************
     
     SHA256 sha256_ctx;
     
-    for(block.nonce=2954000000; block.nonce<=0xffffffff;++block.nonce)
+    for(block.nonce=0x00000000; block.nonce<=0xffffffff;++block.nonce)
     {   
         //sha256d
         double_sha256(&sha256_ctx, (unsigned char*)&block, sizeof(block));
-        if(block.nonce % 100000 == 0)
+        if(block.nonce % 1000000 == 0)
         {
             printf("hash #%10u (big): ", block.nonce);
             print_hex_inverse(sha256_ctx.b, 32);
@@ -290,7 +292,6 @@ void solve(FILE *fin, FILE *fout)
     
 
     // print result
-    printf("Block #286819\n");
 
     //little-endian
     printf("hash(little): ");
@@ -300,11 +301,11 @@ void solve(FILE *fin, FILE *fout)
     //big-endian
     printf("hash(big):    ");
     print_hex_inverse(sha256_ctx.b, 32);
-    printf("\n");
+    printf("\n\n");
 
     for(int i=31;i>=0;--i)
     {
-        fprintf(fout, "%08x", sha256_ctx.b[i]);
+        fprintf(fout, "%02x", sha256_ctx.b[i]);
     }
     fprintf(fout, "\n");
 

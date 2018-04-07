@@ -7,6 +7,7 @@
 //***********************************************************************************
 
 #include <iostream>
+#include <fstream>
 #include <string>
 
 #include <cstdio>
@@ -15,12 +16,6 @@
 #include <cassert>
 
 #include "sha256.h"
-
-#include "merkle_branch.txt" //merkle branch data (#286819)
-
-#define NONCE_START_VALUE 0x33087540
-
-
 
 ////////////////////////   Block   /////////////////////
 
@@ -66,7 +61,7 @@ unsigned char decode(unsigned char c)
 // string_len: the length of the input string
 //      '\0' is not included in string_len!!!
 // out: output bytes array
-void convert_string_to_little_endian_bytes(unsigned char* out, unsigned char *in, size_t string_len)
+void convert_string_to_little_endian_bytes(unsigned char* out, char *in, size_t string_len)
 {
     assert(string_len % 2 == 0);
 
@@ -111,6 +106,13 @@ int little_endian_bit_comparison(const unsigned char *a, const unsigned char *b,
     return 0;
 }
 
+void getline(char *str, size_t len, FILE *fp)
+{
+
+    int i=0;
+    while( i<len && (str[i] = fgetc(fp)) != EOF && str[i++] != '\n');
+    str[len-1] = '\0';
+}
 
 ////////////////////////   Hash   ///////////////////////
 
@@ -126,28 +128,21 @@ void double_sha256(SHA256 *sha256_ctx, unsigned char *bytes, size_t len)
 
 
 // calculate merkle root from several merkle branches
-// sha256_ctx: output hash will store here (little-endian)
+// root: output hash will store here (little-endian)
 // branch: merkle branch  (big-endian)
 // count: total number of merkle branch
-// coinbase: hashed coinbase (little-endian)
-void calc_merkle_root(unsigned char *root, unsigned char branch[][65], size_t count, 
-                        unsigned char *hashed_coinbase)
+void calc_merkle_root(unsigned char *root, int count, char **branch)
 {
-    size_t total_count = count + 1; // merkle branch + coinbase
+    size_t total_count = count; // merkle branch
     unsigned char *raw_list = new unsigned char[(total_count+1)*32];
     unsigned char **list = new unsigned char*[total_count+1];
-    
-    list[0] = raw_list;
-    
-    // copy hashed_coinbase to the first element of the merkle branch list
-    memcpy(list[0], hashed_coinbase, 32);
 
     // copy each branch to the list
-    for(int i=1;i<total_count; ++i)
+    for(int i=0;i<total_count; ++i)
     {
         list[i] = raw_list + i * 32;
         //convert hex string to bytes array and store them into the list
-        convert_string_to_little_endian_bytes(list[i], branch[i-1], 64);
+        convert_string_to_little_endian_bytes(list[i], branch[i], 64);
     }
 
     list[total_count] = raw_list + total_count*32;
@@ -186,73 +181,65 @@ void calc_merkle_root(unsigned char *root, unsigned char branch[][65], size_t co
 }
 
 
-
-// ****  BitCoin Algorithm  ****
-// 1. Calculate the merkle root from coinbase and merkle branches
-// 2. Decode nbits to find out the target value
-// 3. Iterate nonce from 0x00000000 ~ 0xffffffff until the the hash result is smaller than the target value,
-//    then we have found the solution of the block.
-// *****************************
-
-int main(int argc, char **argv)
+void solve(FILE *fin, FILE *fout)
 {
 
-    // ******** Calculate Merkle Root *********
+    // **** read data *****
+    char version[9];
+    char prevhash[65];
+    char ntime[9];
+    char nbits[9];
+    int tx;
+    char *raw_merkle_branch;
+    char **merkle_branch;
 
-    //     unsigned char hashed_coinbase[65];       //defined in "offline_demo.mkrt"
-    //     unsigned char merkle_branch[98][65];     //defined in "offline_demo.mkrt"
-    size_t branch_count = 98;                       //total branches
-    unsigned char coinbase_bin[32];                 //hashed coinbase
-    unsigned char merkle_root[32];                  //merkle root
+    getline(version, 9, fin);
+    getline(prevhash, 65, fin);
+    getline(ntime, 9, fin);
+    getline(nbits, 9, fin);
+    fscanf(fin, "%d\n", &tx);
 
-    // convert coinbase to byte & swap endian
-    convert_string_to_little_endian_bytes(coinbase_bin, hashed_coinbase, 64);
+    raw_merkle_branch = new char [tx * 65];
+    merkle_branch = new char *[tx];
+    for(int i=0;i<tx;++i)
+    {
+        merkle_branch[i] = raw_merkle_branch + i * 65;
+        getline(merkle_branch[i], 65, fin);
+        merkle_branch[i][64] = '\0';
+        fprintf(fout, "  \"%s\",\n", merkle_branch[i]);
+    }
 
-    // calculate merkle root
-    calc_merkle_root(merkle_root, merkle_branch, branch_count, coinbase_bin);
-    
-    // print in little-endian order
+    // **** calculate merkle root ****
+
+    unsigned char merkle_root[32];
+    calc_merkle_root(merkle_root, tx, merkle_branch);
+
     printf("merkle root(little): ");
     print_hex(merkle_root, 32);
     printf("\n");
 
-    // print in big-endian order
     printf("merkle root(big):    ");
     print_hex_inverse(merkle_root, 32);
-    printf("\n\n");
+    printf("\n");
 
 
-    
-    
-    // ********* Same as Example001 **********
-    
-    
-    // Block #286819
-    // from Block Explorer
-    unsigned char prevhash[] = "000000000000000117c80378b8da0e33559b5997f2ad55e2f7d18ec1975b9717";  //big-endian
-    unsigned char version[] = "00000002";  //big-endian
-    unsigned char nbits[] =   "19015f53";  //big-endian
-    unsigned char ntime[] =   "53058b35";  //big-endian  // 2014-02-20 04:57:25
-    
-    //print block info
+    // **** solve block ****
     printf("Block info (big): \n");
-    printf("  veresion:   %s\n", version);
-    printf("  prevhash:   %s\n", prevhash);
+    printf("  version:  %s\n", version);
+    printf("  pervhash: %s\n", prevhash);
     printf("  merkleroot: "); print_hex_inverse(merkle_root, 32); printf("\n");
-    printf("  nbits:      %s\n", nbits);
-    printf("  ntime:      %s\n", ntime);
-    printf("  nonce:      ???\n\n");
-    
+    printf("  nbits:    %s\n", nbits);
+    printf("  ntime:    %s\n", ntime);
+    printf("  nonce:    ???\n\n");
+
     HashBlock block;
 
     // convert to byte array in little-endian
-    convert_string_to_little_endian_bytes((unsigned char *)&block.version, version,   8);
+    convert_string_to_little_endian_bytes((unsigned char *)&block.version, version, 8);
     convert_string_to_little_endian_bytes(block.prevhash,                  prevhash,    64);
     memcpy(block.merkle_root, merkle_root, 32);
     convert_string_to_little_endian_bytes((unsigned char *)&block.nbits,   nbits,     8);
     convert_string_to_little_endian_bytes((unsigned char *)&block.ntime,   ntime,     8);
-    
-    // the answer is "33087548" in hex, which is equal to 856192328 in dec.
     block.nonce = 0;
     
     
@@ -279,17 +266,24 @@ int main(int argc, char **argv)
     
     SHA256 sha256_ctx;
     
-    for(block.nonce=NONCE_START_VALUE; block.nonce<=0xffffffff;++block.nonce)
+    for(block.nonce=2954000000; block.nonce<=0xffffffff;++block.nonce)
     {   
         //sha256d
         double_sha256(&sha256_ctx, (unsigned char*)&block, sizeof(block));
-        printf("hash #%10d (big): ", block.nonce);
-        print_hex_inverse(sha256_ctx.b, 32);
-        printf("\n");
+        if(block.nonce % 100000 == 0)
+        {
+            printf("hash #%10u (big): ", block.nonce);
+            print_hex_inverse(sha256_ctx.b, 32);
+            printf("\n");
+        }
         
         if(little_endian_bit_comparison(sha256_ctx.b, target_hex, 32) < 0)  // sha256_ctx < target_hex
         {
-            printf("Found Solution!!\n\n");
+            printf("Found Solution!!\n");
+            printf("hash #%10u (big): ", block.nonce);
+            print_hex_inverse(sha256_ctx.b, 32);
+            printf("\n\n");
+
             break;
         }
     }
@@ -308,11 +302,30 @@ int main(int argc, char **argv)
     print_hex_inverse(sha256_ctx.b, 32);
     printf("\n");
 
-    printf("answer:       0000000000000000e067a478024addfecdc93628978aa52d91fabd4292982a50\n\n");
+    for(int i=31;i>=0;--i)
+    {
+        fprintf(fout, "%08x", sha256_ctx.b[i]);
+    }
+    fprintf(fout, "\n");
 
-    printf("from Block Explorer: \n");
-    printf("https://blockexplorer.com/block/"
-                "0000000000000000e067a478024addfecdc93628978aa52d91fabd4292982a50\n\n");
+    delete[] merkle_branch;
+    delete[] raw_merkle_branch;
+}
+
+int main(int argc, char **argv)
+{
+    FILE *fin = fopen(argv[1], "r");
+    FILE *fout = fopen(argv[2], "w");
+
+    int totalblock;
+
+    fscanf(fin, "%d\n", &totalblock);
+    fprintf(fout, "%d\n", totalblock);
+
+    for(int i=0;i<totalblock;++i)
+    {
+        solve(fin, fout);
+    }
 
     return 0;
 }
